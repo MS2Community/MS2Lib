@@ -123,7 +123,7 @@ public class MS2Archive : IMS2Archive {
     }
 
     protected async Task LoadAsync(FileStream headerStream, FileStream dataStream) {
-        MappedDataFile = MemoryMappedFile.CreateFromFile(dataStream, Name, 0L, MemoryMappedFileAccess.Read, HandleInheritability.None, true);
+        MappedDataFile = MemoryMappedFile.CreateFromFile(dataStream, null, 0L, MemoryMappedFileAccess.Read, HandleInheritability.None, true);
 
         try {
             await InternalLoadAsync(headerStream).ConfigureAwait(false);
