@@ -208,6 +208,7 @@ public class MS2Archive : IMS2Archive {
         long offset = 0;
 
         await using (var fileInfoWriter = new StreamWriter(fileInfoMemoryStream, Encoding.ASCII, 1 << 10, true)) {
+            fileInfoWriter.NewLine = "\r\n";
             foreach (IMS2File file in Files.Values) {
                 (Stream fileStream, IMS2SizeHeader fileSize) = await file.GetStreamForArchivingAsync().ConfigureAwait(false);
 
