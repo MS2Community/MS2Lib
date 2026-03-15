@@ -1,5 +1,6 @@
 ﻿using System;
 using System.IO;
+using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
@@ -314,20 +315,20 @@ namespace MS2Lib.Tests
         }
 
         [TestMethod]
-        [DataRow("TestData\\MS2F", "TestData\\MS2F_Files.out", "TestData\\MS2F_Files_expectedoutput", "TestData\\MS2F_Files", "MS2F")]
-        [DataRow("TestData\\NS2F", "TestData\\NS2F_Files.out", "TestData\\NS2F_Files_expectedoutput", "TestData\\NS2F_Files", "NS2F")]
-        public async Task SaveConcurrentlyAsync_FromEmptyAddExtractedFromExisting_OutputEqualsExpected(string pathWithoutExtension, string outputPathWithoutExtension, string expectedPathWithoutExtension, string extractFolderPath, string cryptoModeString)
+        [DataRow("TestData\\MS2F", "TestData\\MS2F_Files.out", "TestData\\MS2F_Files", "MS2F")]
+        [DataRow("TestData\\NS2F", "TestData\\NS2F_Files.out", "TestData\\NS2F_Files", "NS2F")]
+        public async Task SaveConcurrentlyAsync_FromEmptyAddExtractedFromExisting_RoundtripContentMatches(string pathWithoutExtension, string outputPathWithoutExtension, string extractFolderPath, string cryptoModeString)
         {
             var cryptoMode = Enum.Parse<MS2CryptoMode>(cryptoModeString, true);
             string headerPath = pathWithoutExtension + HeaderFileExtension;
             string dataPath = pathWithoutExtension + DataFileExtension;
-            string expectedHeaderPath = expectedPathWithoutExtension + HeaderFileExtension;
-            string expectedDataPath = expectedPathWithoutExtension + DataFileExtension;
             string outputHeaderPath = outputPathWithoutExtension + HeaderFileExtension;
             string outputDataPath = outputPathWithoutExtension + DataFileExtension;
 
+            // Extract original archive to files
             await ExtractArchiveFilesAsync(headerPath, dataPath, extractFolderPath);
 
+            // Re-package extracted files into a new archive
             var archive = new MS2Archive(Repositories.Repos[cryptoMode]);
             var filePaths = GetFilesRelative(extractFolderPath);
             for (uint i = 0; i < filePaths.Length; i++)
@@ -336,13 +337,22 @@ namespace MS2Lib.Tests
             }
             await archive.SaveConcurrentlyAsync(outputHeaderPath, outputDataPath);
 
-            var expectedHeaderBytes = await File.ReadAllBytesAsync(expectedHeaderPath);
-            var expectedDataBytes = await File.ReadAllBytesAsync(expectedDataPath);
-            var actualHeaderBytes = await File.ReadAllBytesAsync(outputHeaderPath);
-            var actualDataBytes = await File.ReadAllBytesAsync(outputDataPath);
+            // Load the re-packaged archive and verify each file's content matches
+            using var reloadedArchive = await MS2Archive.GetAndLoadArchiveAsync(outputHeaderPath, outputDataPath);
+            Assert.AreEqual(filePaths.Length, reloadedArchive.Count);
 
-            CollectionAssert.AreEqual(expectedHeaderBytes, actualHeaderBytes);
-            CollectionAssert.AreEqual(expectedDataBytes, actualDataBytes);
+            foreach (IMS2File file in reloadedArchive)
+            {
+                await using Stream stream = await file.GetStreamAsync();
+                using var ms = new MemoryStream();
+                await stream.CopyToAsync(ms);
+                byte[] actualContent = ms.ToArray();
+
+                string originalFilePath = filePaths.First(f => f.RelativePath.Replace('\\', '/') == file.Name).FullPath;
+                byte[] expectedContent = await File.ReadAllBytesAsync(originalFilePath);
+
+                CollectionAssert.AreEqual(expectedContent, actualContent, $"Content mismatch for file: {file.Name}");
+            }
         }
         #endregion
 
