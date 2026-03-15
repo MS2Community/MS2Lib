@@ -11,7 +11,6 @@
         <OutputPath>..\Release\</OutputPath>
     </PropertyGroup>
     <ItemGroup>
-        <PackageReference Include="DotNetZip" Version="1.13.8"/>
         <PackageReference Include="Portable.BouncyCastle" Version="1.8.6.7"/>
     </ItemGroup>
     <ItemGroup>

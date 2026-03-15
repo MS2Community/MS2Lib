@@ -1,7 +1,7 @@
 ﻿using System;
 using System.IO;
+using System.IO.Compression;
 using System.Threading.Tasks;
-using Ionic.Zlib;
 using Org.BouncyCastle.Crypto;
 using Org.BouncyCastle.Crypto.IO;
 using Org.BouncyCastle.Crypto.Parameters;
@@ -40,15 +40,27 @@ public static class CryptoHelper {
         await using var cs = new CipherStream(input, cipher, null);
         byte[] bytes = new byte[size.Size];
 
-        int readBytes;
+        Stream readStream;
         if (zlibCompressed) {
-            await using var z = new ZlibStream(cs, CompressionMode.Decompress, true);
-            readBytes = await z.ReadAsync(bytes, 0, bytes.Length).ConfigureAwait(false);
+            readStream = new ZLibStream(cs, CompressionMode.Decompress, true);
         } else {
-            readBytes = await cs.ReadAsync(bytes, 0, bytes.Length).ConfigureAwait(false);
+            readStream = cs;
         }
 
-        if (readBytes != size.Size) {
+        int totalRead = 0;
+        int remaining = bytes.Length;
+        while (remaining > 0) {
+            int read = await readStream.ReadAsync(bytes, totalRead, remaining).ConfigureAwait(false);
+            if (read == 0) break;
+            totalRead += read;
+            remaining -= read;
+        }
+
+        if (zlibCompressed) {
+            await readStream.DisposeAsync().ConfigureAwait(false);
+        }
+
+        if (totalRead != size.Size) {
             throw new ArgumentException("Size bytes from input do not match with header size.", nameof(input));
         }
 
@@ -60,7 +72,7 @@ public static class CryptoHelper {
     public static async Task<(MemoryStream output, IMS2SizeHeader size)> GetEncryptionStreamAsync(Stream input, long inputSize, IMultiArray key, IMultiArray iv, bool zlibCompress) {
         if (zlibCompress) {
             using var ms = new MemoryStream();
-            await using (var z = new ZlibStream(ms, CompressionMode.Compress, CompressionLevel.BestCompression, true)) {
+            await using (var z = new ZLibStream(ms, CompressionLevel.SmallestSize, true)) {
                 byte[] inputBytes = new byte[inputSize];
                 int read = await input.ReadAsync(inputBytes, 0, (int) inputSize).ConfigureAwait(false);
                 if (read != inputSize) {
