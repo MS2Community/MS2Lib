@@ -209,7 +209,7 @@ public class MS2Archive : IMS2Archive {
 
         await using (var fileInfoWriter = new StreamWriter(fileInfoMemoryStream, Encoding.ASCII, 1 << 10, true)) {
             fileInfoWriter.NewLine = "\r\n";
-            foreach (IMS2File file in Files.Values) {
+            foreach (IMS2File file in Files.Values.OrderBy(f => f.Id)) {
                 (Stream fileStream, IMS2SizeHeader fileSize) = await file.GetStreamForArchivingAsync().ConfigureAwait(false);
 
                 await fileStream.CopyToAsync(dataStream).ConfigureAwait(false);
@@ -253,7 +253,7 @@ public class MS2Archive : IMS2Archive {
 
         using var fileHeaderMemoryStream = new MemoryStream();
 
-        IMS2File[] files = Files.Values.ToArray();
+        IMS2File[] files = Files.Values.OrderBy(f => f.Id).ToArray();
         long fileCount = files.Length;
 
         // prepare for writing (encrypt if necessary) load everything in memory
